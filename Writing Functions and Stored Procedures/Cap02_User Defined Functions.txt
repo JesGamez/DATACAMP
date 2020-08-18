@@ -1,0 +1,191 @@
+2) Funciones definidas por el usuario
+
+--2.1 Funciones definidas por el usuario (VIDEO)
+
+--2.2 ¿Qué dia fue ayer?
+
+-- Crear GetYesterday()
+CREATE FUNCTION GetYesterday()
+
+-- Especificar el tipo de datos devueltos
+RETURNS date
+AS
+BEGIN
+
+-- Calcular el valor de la fecha de ayer
+RETURN(SELECT DATEADD(day, -1, GETDATE()))
+END 
+
+--2.3 Uno en uno
+
+-- Crear SumRideHrsSingleDay
+CREATE FUNCTION SumRideHrsSingleDay (@DateParm date)
+
+-- Especificar el tipo de datos devueltos
+RETURNS numeric
+AS
+
+-- BEGIN
+BEGIN
+RETURN
+
+-- Agregar la diferencia entre StartDate y EndDate
+(SELECT SUM(DATEDIFF(second, StartDate, EndDate))/3600
+FROM CapitalBikeShare
+
+ -- Solo incluya transacciones donde StartDate = @DateParm
+WHERE CAST(StartDate AS date) = @DateParm)
+
+-- End
+END
+
+--2.4 Varias entradas una salida
+
+-- Crear la funcion
+CREATE FUNCTION SumRideHrsDateRange (@StartDateParm datetime, @EndDateParm datetime)
+
+-- Especificar el tipo de datos resuelto
+RETURNS numeric
+AS
+BEGIN
+RETURN
+
+-- Sumar la diferencia entre StartDate y EndDate
+(SELECT SUM(DATEDIFF(second, StartDate, EndDate))/3600
+FROM CapitalBikeShare
+
+-- Incluir solo las transacciones relevantes
+WHERE StartDate > @StartDateParm and StartDate < @EndDateParm)
+END
+
+--2.5 UDF con valores de tabla (VIDEO)
+
+--2.6 TVF en linea
+
+-- Crear la funcion
+CREATE FUNCTION SumStationStats(@StartDate AS datetime)
+
+-- Especificar el tipo de datos devueltos
+RETURNS TABLE
+AS
+RETURN
+SELECT
+	StartStation,
+
+    -- Usar COUNT() para seleccionar RideCount
+	COUNT(ID) as RideCount,
+
+    -- Usar SUM() para calcular TotalDuration
+    SUM(DURATION) as TotalDuration
+FROM CapitalBikeShare
+WHERE CAST(StartDate as Date) = @StartDate
+
+-- Group by StartStation
+GROUP BY StartStation;
+
+--2.7 TVF de declaración múltiple
+
+-- Crear la funcion
+CREATE FUNCTION CountTripAvgDuration (@Month CHAR(2), @Year CHAR(4))
+
+-- Especificar la variable de retorno
+RETURNS @DailyTripStats TABLE(
+	TripDate	date,
+	TripCount	int,
+	AvgDuration	numeric)
+AS
+BEGIN
+
+-- Insertar los datos de la consulta en @DailyTripStats
+INSERT @DailyTripStats
+SELECT
+
+    -- Cast StartDate as a date
+	CAST(StartDate AS date),
+    COUNT(ID),
+    AVG(Duration)
+FROM CapitalBikeShare
+WHERE
+	DATEPART(month, StartDate) = @Month AND
+    DATEPART(year, StartDate) = @Year
+
+-- Group by StartDate as a date
+GROUP BY CAST(StartDate AS date)
+
+-- Return
+RETURN
+END
+
+--2.8 UDF en accion (VIDEO)
+--2.9 Ejecutar escalar con seleccionar
+
+-- Crear @BeginDate
+DECLARE @BeginDate AS date = '3/1/2018'
+
+-- Crear @EndDate
+DECLARE @EndDate AS date = '3/10/2018' 
+SELECT
+
+  -- Seleccionar @BeginDate
+  @BeginDate AS BeginDate,
+
+  -- Seleccionar @EndDate
+  @EndDate AS EndDate,
+
+  -- Ejecutar SumRideHrsDateRange()
+  dbo.SumRideHrsDateRange(@BeginDate, @EndDate) AS TotalRideHrs
+
+--2.10 EXEC escalar
+
+-- Crear @RideHrs
+DECLARE @RideHrs AS numeric
+
+-- Ejecutar la funcion SumRideHrsSingleDay y almacenar el resultado en @RideHrs
+EXEC @RideHrs = dbo.SumRideHrsSingleDay @DateParm = '3/5/2018' 
+SELECT 
+  'Total Ride Hours for 3/5/2018:', 
+  @RideHrs
+
+--2.11 Ejecute TVF en variable
+
+-- Crear @StationStats
+DECLARE @StationStats TABLE(
+	StartStation nvarchar(100), 
+	RideCount int, 
+	TotalDuration numeric)
+
+-- Completar @StationStats con los resultados de la funcion
+INSERT INTO @StationStats
+SELECT TOP 10 *
+
+-- Ejecutar SumStationStats con 3/15/2018
+FROM dbo.SumStationStats ('3/15/2018') 
+ORDER BY RideCount DESC
+
+-- Selecionar todos los registros de @StationStats
+SELECT * 
+FROM @StationStats
+
+--2.12 Mantener funciones definidas por el usuario (VIDEO)
+
+--2.13 CREATE o ALTER
+
+-- Actualizar SumStationStats
+CREATE OR ALTER FUNCTION dbo.SumStationStats(@EndDate AS date)
+
+-- Habilitar SCHEMABINDING
+RETURNS TABLE WITH SCHEMABINDING
+AS
+RETURN
+SELECT
+	StartStation,
+    COUNT(ID) AS RideCount,
+    SUM(DURATION) AS TotalDuration
+FROM dbo.CapitalBikeShare
+-- Cast EndDate as date y comparar con @EndDate
+WHERE CAST(EndDate AS Date) = @EndDate
+GROUP BY StartStation;
+
+--2.14 Mejores prácticas
+¿Qué hace que una función sea determinista?
+--Si devuelve el pronostico de mañana
