@@ -1,0 +1,222 @@
+--3) Stored procedures (VIDEO)
+-- 3.1 CREAR PROCEDIMIENTO con SALIDA
+
+-- Crear el stored procedure
+CREATE PROCEDURE dbo.cuspSumRideHrsSingleDay
+    -- Declarar el parametro de entrada
+	@DateParm date,
+    -- Declarar el parametro de salida
+	@RideHrsOut numeric OUTPUT
+AS
+-- No enviar el recuento de filas
+SET NOCOUNT ON
+BEGIN
+
+-- Asignar el resultado de la consulta @RideHrsOut
+SELECT
+	@RideHrsOut = SUM(DATEDIFF(second, StartDate, EndDate))/3600
+FROM CapitalBikeShare
+
+-- Cast StartDate as date y comparar con @DateParm
+WHERE CAST(StartDate AS date) = @DateParm
+RETURN
+END
+
+-- 3.2 Parámetros de salida frente a valores de retorno
+Seleccione la declaración que es FALSA al comparar los parámetros de salida y los valores de retorno.
+-- Los parametros de salida deben usarse para comunicar errores a la aplicacion que realiza la llamada
+
+--3.3 ¡OH CRUD! (VIDEO)
+--3.4 Utilice SP para INSERTAR
+
+-- Crear el stored procedure
+CREATE PROCEDURE dbo.cusp_RideSummaryCreate 
+    (@DateParm date, @RideHrsParm numeric)
+AS
+BEGIN
+SET NOCOUNT ON
+
+-- Insertar en las columnas Date y RideHours
+INSERT INTO dbo.RideSummary(Date, RideHours)
+
+-- Utilice valores de @DateParm y @RideHrsParm
+VALUES(@DateParm, @RideHrsParm) 
+
+-- Seleccione el registro que acaba de insertar
+SELECT
+    -- Seleccioanr la columna fecha
+	Date,
+    -- seleccionar la columna RideHours
+    RideHours
+FROM dbo.RideSummary
+
+-- Comprobar si la fecha es igual a @DateParm
+WHERE Date = @DateParm
+END;
+
+--3.5 Utilice SP para ACTUALIZAR
+
+-- Crear el stored procedure
+CREATE PROCEDURE dbo.cuspRideSummaryUpdate
+
+	-- Especificar el parametro de entrada @Date 
+	(@Date date,
+
+     -- Especificar el aprametro de entrada @RideHrs
+     @RideHrs numeric(18,0))
+AS
+BEGIN
+SET NOCOUNT ON
+
+-- UPDATE RideSummary
+UPDATE RideSummary
+
+-- Set
+SET
+	Date = @Date,
+    RideHours = @RideHrs
+
+-- Incluir registros donde la fecha es igual a @Date
+WHERE Date = @Date
+END;
+
+--3.6 Utilice SP para BORRAR
+
+-- Crear el stored procedure
+CREATE PROCEDURE dbo.cuspRideSummaryDelete
+	-- Especificar el aprametro de entrada @DateParm 
+	(@DateParm date,
+     -- Especificar el parametro de salida @RowCountOut 
+     @RowCountOut int OUTPUT)
+AS
+BEGIN
+
+-- Eliminar registros donde la fecha es igual a @DateParm
+DELETE FROM dbo.RideSummary
+WHERE Date = @DateParm
+
+-- Set @RowCountOut en @@ROWCOUNT
+SET @RowCountOut = @@ROWCOUNT
+END;
+
+--3.7 Ejecutemos (VIDEO)
+
+--3.8 EJECUTAR con el parámetro SALIDA
+
+-- Crear @RideHrs
+DECLARE @RideHrs AS numeric(18,0)
+
+-- Ejecutar el stored procedure
+EXEC dbo.cuspSumRideHrsSingleDay
+
+    -- Pasar el parametro de entrada
+	@DateParm = '3/1/2018',
+
+    -- Store la salida en @RideHrs
+	@RideHrsOut = @RideHrs OUTPUT
+
+-- Seleccione @RideHrs
+SELECT @RideHrs AS RideHours
+
+--3.9 EJECUTAR con valor de retorno
+
+-- Crear @ReturnStatus
+DECLARE @ReturnStatus AS int
+
+-- Ejecutar el SP
+EXEC @ReturnStatus = dbo.cuspRideSummaryUpdate
+
+    -- Especificar @DateParm
+	@DateParm = '3/1/2018',
+
+    -- Especificar @RideHrs
+	@RideHrs = 300
+
+-- Seleccione las columnas de interes
+SELECT
+	@ReturnStatus AS ReturnStatus,
+    Date,
+    RideHours
+FROM dbo.RideSummary 
+WHERE Date = '3/1/2018';
+
+--3.10 EJECUTAR con SALIDA y valor de retorno
+
+-- Crear @ReturnStatus
+DECLARE @ReturnStatus AS int
+
+-- Crear @RowCount
+DECLARE @RowCount AS int
+
+-- Ejecute el SP, almacenando el resultado en @ReturnStatus
+EXEC @ReturnStatus = dbo.cuspRideSummaryDelete 
+
+    -- Especifique @DateParm
+	@DateParm = '3/1/2018',
+
+    -- Especificar RowCountOut
+	@RowCountOut = @RowCount OUTPUT
+
+-- Seleccionar las columnas de interes
+SELECT
+	@ReturnStatus AS ReturnStatus,
+    @RowCount as 'RowCount';
+
+--3.11 TRY, CATCH esos errores! (VIDEO)
+
+--3.12 Tu propio TRY..CATCH
+
+-- Alter al stored procedure
+CREATE OR ALTER PROCEDURE dbo.cuspRideSummaryDelete
+
+	-- Especificar @DateParm
+	@DateParm nvarchar(30),
+
+    -- Especificar @Error
+	@Error nvarchar(max) = NULL OUTPUT
+AS
+SET NOCOUNT ON
+BEGIN
+
+  -- Inicio del bloque TRY 
+  BEGIN TRY
+  	  -- Delete
+      DELETE FROM RideSummary
+      WHERE Date = @DateParm
+
+  -- Fin del bloque TRY
+  END TRY
+  -- Inicio del bloque CATCH
+  BEGIN CATCH
+		SET @Error = 
+		'Error_Number: '+ CAST(ERROR_NUMBER() AS VARCHAR) +
+		'Error_Severity: '+ CAST(ERROR_SEVERITY() AS VARCHAR) +
+		'Error_State: ' + CAST(ERROR_STATE() AS VARCHAR) + 
+		'Error_Message: ' + ERROR_MESSAGE() + 
+		'Error_Line: ' + CAST(ERROR_LINE() AS VARCHAR)
+
+  -- Fin del bloque CATCH
+  END CATCH
+END;
+
+--3.13 RECOGER un error
+
+-- Crear @ReturnCode
+DECLARE @ReturnCode int
+
+-- Crear @ErrorOut
+DECLARE @ErrorOut nvarchar(max)
+
+-- Ejecutar el SP, alamacenando el resultado en @ReturnCode
+EXECUTE @ReturnCode = dbo.cuspRideSummaryDelete
+
+    -- Especifique @DateParm
+	@DateParm = '1/32/2018',
+
+    -- Asignar @ErrorOut a @Error
+	@Error = @ErrorOut OUTPUT
+
+-- Seleccione @ReturnCode y @ErrorOut
+SELECT
+	@ReturnCode AS ReturnCode,
+    @ErrorOut AS ErrorMessage;
